@@ -1,10 +1,13 @@
 package com.rookies4.MySpringbootLab;
 
+import com.rookies4.MySpringbootLab.config.MyEnvironment;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.CommandLineRunner;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.stereotype.Component;
 
+@ConditionalOnBean(MyEnvironment.class)
 @Component
 public class MyPropRunner implements CommandLineRunner {
 

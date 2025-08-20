@@ -1,98 +1,82 @@
-// com.rookies4.MySpringbootLab.repository.BookRepositoryTest
 package com.rookies4.MySpringbootLab.repository;
 
 import com.rookies4.MySpringbootLab.entity.Book;
-import org.junit.jupiter.api.MethodOrderer;
-import org.junit.jupiter.api.Order;
+import jakarta.transaction.Transactional;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.TestMethodOrder;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
-import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
-import org.springframework.test.annotation.Commit;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.annotation.Rollback;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-@DataJpaTest
-@AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE) // H2 대체 금지 → MariaDB 사용
-@TestMethodOrder(MethodOrderer.OrderAnnotation.class)
-class BookRepositoryTest {
+@SpringBootTest
+@Transactional
+@org.springframework.test.context.ActiveProfiles("test")
+public class BookRepositoryTest {
 
     @Autowired
-    BookRepository repo;
+    private BookRepository bookRepository;
 
-    //data
-    private static final Book SRC1 = new Book(
-            "스프링 부트 입문", "홍길동", "9788956746425",
-            LocalDate.parse("2025-05-07"), 30000);
-
-    private static final Book SRC2 = new Book(
-            "JPA 프로그래밍", "박둘리", "9788956746432",
-            LocalDate.parse("2025-04-30"), 35000);
-
-    /**ISBN 기준*/
-    private void upsert(Book src) {
-        var opt = repo.findByIsbn(src.getIsbn());
-        if (opt.isEmpty()) {
-            repo.save(new Book(src.getTitle(), src.getAuthor(), src.getIsbn(), src.getPublishDate(), src.getPrice()));
-        } else {
-            var b = opt.get();
-            b.setTitle(src.getTitle());
-            b.setAuthor(src.getAuthor());
-            b.setPublishDate(src.getPublishDate());
-            b.setPrice(src.getPrice());
-            repo.save(b);
-        }
-    }
-
-    //도서 등록
-    @Test @Order(1) @Commit
+    @Test
     void testCreateBook() {
-        upsert(SRC1);
-        upsert(SRC2);
-        assertThat(repo.count()).isGreaterThanOrEqualTo(2);
+        Book book = new Book("스프링 부트 입문", "홍길동", "9788956746425",
+                LocalDate.of(2023, 1, 15), 30000);
+
+        Book saved = bookRepository.save(book);
+
+        assertThat(saved.getId()).isNotNull();
+        assertThat(saved.getTitle()).isEqualTo("스프링 부트 입문");
     }
 
-    //ISBN으로 조회
-    @Test @Order(2)
+    @Test
     void testFindByIsbn() {
-        var found = repo.findByIsbn(SRC1.getIsbn());
+        Book book = new Book("JPA 프로그래밍", "박둘리", "9788956746432",
+                LocalDate.of(2024, 3, 24), 35000);
+        bookRepository.save(book);
+
+        Optional<Book> found = bookRepository.findByIsbn("9788956746432");
+
         assertThat(found).isPresent();
-        assertThat(found.get().getAuthor()).isEqualTo("홍길동");
-        assertThat(found.get().getTitle()).isEqualTo("스프링 부트 입문");
+        assertThat(found.get().getAuthor()).isEqualTo("박둘리");
     }
 
-    //저자로 도서 목록 조회
-    @Test @Order(3)
+    @Test
     void testFindByAuthor() {
-        List<Book> list = repo.findByAuthor("박둘리");
-        assertThat(list).isNotEmpty();
-        assertThat(list.get(0).getIsbn()).isEqualTo(SRC2.getIsbn());
+        bookRepository.saveAll(List.of(
+                new Book("스프링 부트 입문", "홍길동", "9788956746426", LocalDate.now(), 30000),
+                new Book("스프링 클라우드", "홍길동", "9788956746427", LocalDate.now(), 38000)
+        ));
+
+        List<Book> books = bookRepository.findByAuthor("홍길동");
+
+        assertThat(books).hasSize(2);
     }
 
-    //도서 정보 수정
-    @Test @Order(4) @Commit
+    @Test
+    @Rollback(false)
     void testUpdateBook() {
-        var book = repo.findByIsbn(SRC1.getIsbn()).orElseThrow();
-        book.setTitle("스프링 부트 입문(개정판)");
-        book.setPrice(31000);
-        var updated = repo.save(book);
-        assertThat(updated.getTitle()).contains("개정판");
-        assertThat(updated.getPrice()).isEqualTo(31000);
+        Book book = new Book("스프링 부트 입문", "홍길동", "9788956746428", LocalDate.now(), 30000);
+        Book saved = bookRepository.save(book);
+
+        saved.setPrice(32000);
+        Book updated = bookRepository.save(saved);
+
+        assertThat(updated.getPrice()).isEqualTo(32000);
     }
 
-    //도서 삭제
-    @Test @Order(5) @Commit
+    @Test
+    @Rollback(value = false)
     void testDeleteBook() {
-        var book = repo.findByIsbn(SRC1.getIsbn()).orElse(null);
-        if (book != null) repo.delete(book);
-        assertThat(repo.findByIsbn(SRC1.getIsbn())).isEmpty();
+        Book book = new Book("JPA 프로그래밍", "박둘리", "9788956746429", LocalDate.now(), 35000);
+        Book saved = bookRepository.save(book);
 
-        //복구
-        upsert(SRC1);
-        assertThat(repo.findByIsbn(SRC1.getIsbn())).isPresent();
+        bookRepository.deleteById(saved.getId());
+
+        assertThat(bookRepository.findById(saved.getId())).isEmpty();
     }
 }
+
